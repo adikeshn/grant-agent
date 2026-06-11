@@ -1,22 +1,21 @@
 # config/nsf_neural.yaml
 
-name: "NSF Neural Engineering"
-description: "NSF-funded research in neural interfaces, prosthetics, and human-machine interaction"
+name: "reinforcement learning"
+description: "funded research in reinforcement learning"
 version: "1.0"
 
 sources:
   keywords:
     - "reinforcement learning"
-    - "RL"
-  date_from: "01/01/2001"
+    - "deep reinforcement learning"
+    - "multi-agent reinforcement learning"
+    - "inverse reinforcement learning"
+    - "Markov decision process"
+    - "policy gradient"
+  date_from: "01/01/2000"
   date_to: ""
-  max_results: 10
+  max_results: 15
 
-ingestion:
-  chunk_size: 400
-  chunk_overlap: 50
-  embedding_model: "BAAI/bge-large-en"
-  vector_namespace: "nsf_neural"
 agent:
   query_types:
     - "landscape"

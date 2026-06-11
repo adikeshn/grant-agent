@@ -10,7 +10,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 def bge_m3_token_len(text: str) -> int:
     return len(tokenizer.encode(text, add_special_tokens=False))  
 
-def bge_m3_embed(text: str):
+def bge_m3_tokenize(text: str):
     return tokenizer.encode(text, add_special_tokens=False)
 
 def chunk_award(award: dict, chunk_size: int = 1400, overlap: int = 50):
@@ -40,13 +40,14 @@ Amount: {award['amount']}"""
         "id": f"chunk-{award["award_id"]}-{chunk_i}",
         'metadata': {
             "award_id": award["award_id"],
+            "domain": award["domain"],
             "chunk_index": chunk_i,
             "source": award["agency"],
             "title": award["title"],
             "pi_name": award["pi_name"],
             "institution": award["institution"],
-            "directorate": award["directorate"],
-            "year": award["year"],
+            "directorate": award["program_directorate"],
+            "year": award["award_year"],
             "amount": award["amount"]
         },
         'text': f"Header: {header}\n\nAbstract: {chunks[chunk_i]}"

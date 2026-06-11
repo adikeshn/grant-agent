@@ -98,20 +98,6 @@ def fetch_nih(source: dict, last_run: str | None = None) -> list[dict]:
 
     return all_results
 
-def check_duplication_cache(awards, name):
-    filtered_data = []
-    with open("ingestion/deduplication_cache.json", "r") as file:
-        data = json.load(file)
-        if name not in data:
-            data[name] = []
-    for award in awards:
-        if award["award_id"] not in data[name]:
-            data[name].append(award["award_id"])
-            filtered_data.append(award)
-    with open("ingestion/deduplication_cache.json", "w") as file:
-        json.dump(data, file, indent=4)
-    return filtered_data
-
 
 def fetch_grant_data(yaml_filename: str):
     yaml = load_config(yaml_filename)
@@ -120,7 +106,11 @@ def fetch_grant_data(yaml_filename: str):
 
     all_awards = []
     for award in awards_nsf + awards_nih:
-        all_awards.append(normalize(award))
+        n_award = normalize(award)
+        if n_award is None:
+            raise Exception("Error with normalizing")
+        n_award["domain"] = yaml["name"]
+        all_awards.append(n_award)
 
     return all_awards, yaml["name"]
 
