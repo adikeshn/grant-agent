@@ -1,0 +1,33 @@
+# config/nsf_neural.yaml
+
+name: "NSF Neural Engineering"
+description: "NSF-funded research in neural interfaces, prosthetics, and human-machine interaction"
+version: "1.0"
+
+sources:
+  keywords:
+    - "reinforcement learning"
+    - "RL"
+  date_from: "01/01/2001"
+  date_to: ""
+  max_results: 10
+
+ingestion:
+  chunk_size: 400
+  chunk_overlap: 50
+  embedding_model: "BAAI/bge-large-en"
+  vector_namespace: "nsf_neural"
+agent:
+  query_types:
+    - "landscape"
+    - "framing"
+    - "gap"
+    - "positioning"
+    - "pattern"
+  extraction_schema: "grant_funding"
+  temporal_enabled: true
+
+schedule:
+  frequency: "weekly"
+  day: "monday"
+  hour: 6
