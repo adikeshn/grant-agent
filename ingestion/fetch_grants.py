@@ -9,25 +9,26 @@ from pathlib import Path
 from datetime import date
 from normalize import normalize
 from chunk import chunk_award
+from api.api import Domain
 
 def load_config(yaml_file_path: str):
     path = Path(f"config/{yaml_file_path}.yaml")
     with open(path) as f:
         return yaml.safe_load(f)
     
-def fetch_nsf(config: dict):
+def fetch_nsf(inj_domain: Domain) -> list[dict]:
 
     url = "http://api.nsf.gov/services/v1/awards.json"
     seen_ids = set()
-    query_string = [f'"{keyword}"' for keyword in config["keywords"]]
+    query_string = [f'"{keyword}"' for keyword in inj_domain.keywords]
     offset = 1
     awards = []
-    max_results = config["max_results"]
+    max_results = inj_domain.max_results
     while len(awards) < max_results:
         curr_results = min(25, max_results - offset + 1)
         query_parameters = {
             "keyword": query_string,
-            "startDateStart": config["date_from"],
+            "startDateStart": inj_domain.date_from,
             "rpp": curr_results,       
             "offset": offset     
         }
@@ -52,9 +53,9 @@ def fetch_nsf(config: dict):
             break
     return awards
 
-def fetch_nih(source: dict, last_run: str | None = None) -> list[dict]:
-    date_from = last_run or source["date_from"]
-    date_to = source.get("date_to") or date.today().strftime("%Y-%m-%d")
+def fetch_nih(inj_domain: Domain) -> list[dict]:
+    date_from = inj_domain.date_from
+    date_to = inj_domain.date_to or date.today().strftime("%Y-%m-%d")
     all_results = []
     seen_ids = set()
     payload = {
@@ -62,13 +63,13 @@ def fetch_nih(source: dict, last_run: str | None = None) -> list[dict]:
             'advanced_text_search': { 
                 'operator': "and", 
                 'search_field': "projecttitle,terms,abstracttext", 
-                "search_text": ' OR '.join(f"\"{keyword}\"" for keyword in source["keywords"])},
+                "search_text": ' OR '.join(f"\"{keyword}\"" for keyword in inj_domain.keywords)},
             "award_notice_date": {
                 "from_date": date_from,
                 "to_date": date_to
             },
         },
-        "limit": source["max_results"],
+        "limit": inj_domain.max_results,
         "offset": 0,
         "fields": [
             "ProjectNum", "ProjectTitle", "AbstractText",
@@ -77,9 +78,6 @@ def fetch_nih(source: dict, last_run: str | None = None) -> list[dict]:
             "AgencyIcAdmin"
         ]
     }
-
-    if source.get("institutes"):
-        payload["criteria"]["agencies"] = source["institutes"]
 
     response = requests.post(
         "https://api.reporter.nih.gov/v2/projects/search",
@@ -99,20 +97,22 @@ def fetch_nih(source: dict, last_run: str | None = None) -> list[dict]:
     return all_results
 
 
-def fetch_grant_data(yaml_filename: str):
-    yaml = load_config(yaml_filename)
-    awards_nsf = fetch_nsf(yaml["sources"])
-    awards_nih = fetch_nih(yaml["sources"])
+def fetch_grant_data(new_domain: Domain):
+    awards_nih, awards_nsf = []
+    if new_domain.fetch_nih:
+        awards_nih = fetch_nih(new_domain)
+    if new_domain.fetch_nsf:
+        awards_nsf = fetch_nsf(new_domain)
 
     all_awards = []
     for award in awards_nsf + awards_nih:
         n_award = normalize(award)
         if n_award is None:
             raise Exception("Error with normalizing")
-        n_award["domain"] = yaml["name"]
+        n_award["domain"] = new_domain.name
         all_awards.append(n_award)
 
-    return all_awards, yaml["name"]
+    return all_awards, new_domain.name
 
 
 

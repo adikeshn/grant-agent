@@ -37,3 +37,13 @@ def upsert(chunks: list[dict], namespace: str):
         vectors=vectors,
         namespace=namespace
     )
+
+def dense_retrieval(query_txt: str, namespace: str, k: int):
+    q_embedding = bge_m3_embed(query_txt)
+    results = index.query(
+        namespace=namespace,
+        vector=q_embedding,
+        top_k=k,
+        include_metadata=True
+    )
+    return results

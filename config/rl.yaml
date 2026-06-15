@@ -1,10 +1,11 @@
 # config/nsf_neural.yaml
 
 name: "reinforcement learning"
-description: "funded research in reinforcement learning"
-version: "1.0"
 
 sources:
+  agency:
+    - "nsf"
+    - "nih"
   keywords:
     - "reinforcement learning"
     - "deep reinforcement learning"
@@ -14,19 +15,4 @@ sources:
     - "policy gradient"
   date_from: "01/01/2000"
   date_to: ""
-  max_results: 15
-
-agent:
-  query_types:
-    - "landscape"
-    - "framing"
-    - "gap"
-    - "positioning"
-    - "pattern"
-  extraction_schema: "grant_funding"
-  temporal_enabled: true
-
-schedule:
-  frequency: "weekly"
-  day: "monday"
-  hour: 6
+  max_results: 30

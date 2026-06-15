@@ -1,7 +1,5 @@
 from datetime import datetime
 
-# --- Utility functions ---
-
 def normalize_date(date_str: str) -> str:
     if not date_str:
         return ""
