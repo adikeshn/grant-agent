@@ -1,12 +1,19 @@
-from fetch_grants import fetch_grant_data
-from pinecone_db import upsert
-from supabase import ingest_batch, downstream_failure, get_bm_25
-from celery_app import app
-from api.api import Domain
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from api.api import DomainRequest
+
+from .fetch_grants import fetch_grant_data
+from .pinecone_db import upsert
+from .supabase import ingest_batch, downstream_failure, get_bm_25
+from .celery_app import app
+
 
 
 @app.task
-def run_injest_pipeline(inj_domain: Domain):
+def run_injest_pipeline(inj_domain: DomainRequest):
     ids = []
     chunks = []
     try:

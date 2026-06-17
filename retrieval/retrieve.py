@@ -1,11 +1,17 @@
 
-from pinecone_db import dense_retrieval
-from supabase import get_bm_25, tokenize, get_conn, get_ids
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from ingestion.pinecone_db import dense_retrieval
+from ingestion.supabase import get_bm_25, tokenize, get_conn, get_ids
+from ingestion.celery_app import app
+
 from sentence_transformers import CrossEncoder
-from celery_app import app
+
 model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
-@app.task
 def retrieve_chunk_rankings(bm25_indexes, domain: str,
                             query_text: str, top_dense: int, top_sparse: int, 
                             top_final: int, rrf_k: int = 60):
@@ -38,11 +44,13 @@ def retrieve_chunk_rankings(bm25_indexes, domain: str,
         # do reranking with cross encoder
         cross_encode_inp = []
         retrieved_ids = []
+        headers = []
         for key, value in chunk_dict.items():
             if value[0] > 0:
                 cross_encode_inp.append((query_text, value[1]))
                 retrieved_ids.append(key)
-        return sorted((zip(retrieved_ids, cross_encode_inp, model.predict(cross_encode_inp))), key=lambda x: x[2], reverse=True)[:top_final], bm25_indexes[domain]
+                headers.append(value[2])
+        return sorted((zip(retrieved_ids, cross_encode_inp, headers, model.predict(cross_encode_inp))), key=lambda x: x[3], reverse=True)[:top_final]
 
 
     except Exception as e:
@@ -54,10 +62,7 @@ def retrieve_chunk_rankings(bm25_indexes, domain: str,
         if cursor: cursor.close()
         if conn: conn.close()
 
-query = "what are the breakthroughs in reinforcement learning?"
-top_chunks = retrieve_chunk_rankings({}, "reinforcement learning", query, 10, 10, 5, 60)
-for id, encode_inp, score in top_chunks:
-    print(f"{id} -- {score}")
+
 
 
 

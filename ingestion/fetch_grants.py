@@ -1,22 +1,24 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from api.api import DomainRequest
+
+from .normalize import normalize
+
 import xml.etree.ElementTree as ET
-import time
-import ssl
-import certifi
 import requests
-import json
 import yaml
 from pathlib import Path
 from datetime import date
-from normalize import normalize
-from chunk import chunk_award
-from api.api import Domain
 
 def load_config(yaml_file_path: str):
     path = Path(f"config/{yaml_file_path}.yaml")
     with open(path) as f:
         return yaml.safe_load(f)
     
-def fetch_nsf(inj_domain: Domain) -> list[dict]:
+def fetch_nsf(inj_domain: DomainRequest) -> list[dict]:
 
     url = "http://api.nsf.gov/services/v1/awards.json"
     seen_ids = set()
@@ -53,7 +55,7 @@ def fetch_nsf(inj_domain: Domain) -> list[dict]:
             break
     return awards
 
-def fetch_nih(inj_domain: Domain) -> list[dict]:
+def fetch_nih(inj_domain: DomainRequest) -> list[dict]:
     date_from = inj_domain.date_from
     date_to = inj_domain.date_to or date.today().strftime("%Y-%m-%d")
     all_results = []
@@ -97,7 +99,7 @@ def fetch_nih(inj_domain: Domain) -> list[dict]:
     return all_results
 
 
-def fetch_grant_data(new_domain: Domain):
+def fetch_grant_data(new_domain: DomainRequest):
     awards_nih, awards_nsf = []
     if new_domain.fetch_nih:
         awards_nih = fetch_nih(new_domain)

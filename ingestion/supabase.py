@@ -1,6 +1,6 @@
 import psycopg2
 from psycopg2.extras import execute_values
-from chunk import chunk_award
+from .chunk import chunk_award
 from dotenv import load_dotenv
 from rank_bm25 import BM25Okapi
 import os
@@ -29,7 +29,7 @@ def downstream_failure(ids):
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "DELETE FROM awards WHERE award_id = ANY(%s)",
+            "DELETE FROM chunks WHERE award_id = ANY(%s)",
             (ids,)
         )
         conn.commit()
@@ -57,10 +57,19 @@ def tokenize(text: str) -> list[str]:
 def get_ids(domain: str, cursor):
     try:
         cursor.execute(
-            "SELECT id, text FROM chunks WHERE domain = %s",
+            "SELECT (id, text, award_id, source, year, amount, institution, directorate" +
+            "pi_name) FROM chunks WHERE domain = %s",
             (domain,)
         )
-        return {row[0]: [0, row[1]] for row in cursor.fetchall()}
+        return {row[0]: [0, row[1], {
+            "award_id": row[2],
+            "source": row[3],
+            "year": row[4],
+            "amount": row[5],
+            "institution": row[6],
+            "directorate": row[7],
+            "pi_name": row[8],
+        }] for row in cursor.fetchall()}
     except Exception as e:
         print(f"exception fetching ids {e}")
 
