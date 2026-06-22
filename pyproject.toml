@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grant-agent"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    # API layer
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+
+    # Celery + task queue
+    "celery[redis]",
+
+    # Database
+    "psycopg2-binary",
+    "python-dotenv",
+
+    # Pinecone
+    "pinecone-client",
+
+    # LangChain / LangGraph
+    "langchain-anthropic",
+    "langchain-core",
+    "langchain-text-splitters",
+    "langgraph",
+
+    # Anthropic SDK (direct usage in agent.py)
+    "anthropic",
+
+    # Embeddings / reranking
+    "FlagEmbedding",
+    "sentence-transformers",
+    "transformers",
+
+    # Retrieval
+    "rank-bm25",
+
+    # Utilities
+    "requests",
+    "pyyaml",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["api*", "ingestion*", "retrieval*", "config*"]

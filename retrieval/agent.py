@@ -37,15 +37,20 @@ def build_graph():
                 HumanMessage(content=state["query"])
             ])
 
+            content = response.content
+            if not isinstance(content, str):
+                return {"error_msg": "Classifier returned no text content"}
 
-            if isinstance(response.content, str):
-                res = json.loads(response.content)
+            res = json.loads(content)
+
         except RateLimitError:
             print("API rate limit error")
             return {"error_msg": "Rate limit exceeded, wait a bit so that my limit resets"}
         except APIStatusError as e:
             print(f"API error: {e.status_code} — {e.message}")
             return {"error_msg": f"API Error: {e.status_code} - {e.message}"}
+        except json.JSONDecodeError as e:
+            return {"error_msg": f"Classifier returned invalid JSON: {e}"}
         except Exception as e:
             return {"error_msg": f"Error during retrieval classification: {e}"}
 
@@ -56,7 +61,8 @@ def build_graph():
         try:
             if "configurable" in config:
                 bm25_indexes = config["configurable"]["bm25_indexes"]
-            top_k_chunks = retrieve_chunk_rankings(bm25_indexes=bm25_indexes, domain=state["domain"],
+                pinecone_index = config["configurable"]["pinecone_index"]
+            top_k_chunks = retrieve_chunk_rankings(bm25_indexes=bm25_indexes, pinecone_index=pinecone_index, domain=state["domain"],
                                     query_text=state["query"], top_dense=state["top_k"]*4, top_sparse=state["top_k"]*4,
                                     top_final=state["top_k"])
 
@@ -76,7 +82,7 @@ def build_graph():
             f"""Question: {state["query"]}
             Retrieved award abstracts:
             {context}
-            Answer the question using only the abstracts above as well as any prior char history.""")]
+            Answer the question using only the abstracts above as well as any prior chat history.""")]
                 
             response = llm.invoke(messages)
                 

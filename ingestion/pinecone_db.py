@@ -9,13 +9,14 @@ load_dotenv()
 api_key = os.getenv("PINECONE_API_KEY")
 index_name = os.getenv("PINECONE_INDEX_NAME")
 
-if index_name is None:
-    raise ValueError("PINECONE_INDEX_NAME environment variable is not set")
-
 model = BGEM3FlagModel('BAAI/bge-m3', use_fp16=True)
 
-pc = Pinecone(api_key=api_key)
-index = pc.Index(index_name)
+def connect_pinecone():
+    pc = Pinecone(api_key=api_key)
+    if not index_name:
+        raise ValueError("Index Name NULL")
+    index = pc.Index(index_name)
+    return index
 
 def bge_m3_embed(text: str):
     output = model.encode([text], max_length=8192)
@@ -23,7 +24,7 @@ def bge_m3_embed(text: str):
 
 
 
-def upsert(chunks: list[dict], namespace: str):
+def upsert(chunks: list[dict], namespace: str, index):
     vectors = []
     for chunk in chunks:
         embed = bge_m3_embed(chunk["text"])
@@ -38,7 +39,7 @@ def upsert(chunks: list[dict], namespace: str):
         namespace=namespace
     )
 
-def dense_retrieval(query_txt: str, namespace: str, k: int):
+def dense_retrieval(query_txt: str, namespace: str, k: int, index):
     q_embedding = bge_m3_embed(query_txt)
     results = index.query(
         namespace=namespace,

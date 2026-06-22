@@ -1,28 +1,22 @@
-
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from ingestion.pinecone_db import dense_retrieval
-from ingestion.supabase import get_bm_25, tokenize, get_conn, get_ids
+from ingestion.supabase import get_bm_25, tokenize, get_supabase_conn, get_ids
 from ingestion.celery_app import app
 
 from sentence_transformers import CrossEncoder
 
 model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
-def retrieve_chunk_rankings(bm25_indexes, domain: str,
+def retrieve_chunk_rankings(bm25_indexes, pinecone_index, domain: str,
                             query_text: str, top_dense: int, top_sparse: int, 
                             top_final: int, rrf_k: int = 60):
     conn = None
     cursor = None
     try:
-        conn = get_conn()
+        conn = get_supabase_conn()
         cursor = conn.cursor()
 
         # get sparse and dense rankings
-        dense_results = dense_retrieval(query_txt=query_text, namespace=domain, k=top_dense)
+        dense_results = dense_retrieval(query_txt=query_text, namespace=domain, k=top_dense, index=pinecone_index)
         chunk_dict = get_ids(domain, cursor)
         if chunk_dict is None:
             raise ValueError("chunk list is None")

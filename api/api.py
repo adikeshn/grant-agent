@@ -1,10 +1,8 @@
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from ingestion.injest import run_injest_pipeline
 from retrieval.agent import build_graph
+from ingestion.write_to_graph import connect_neo4j_db
+from ingestion.pinecone_db import connect_pinecone
+from ingestion.supabase import get_supabase_conn
 from langchain_core.messages import HumanMessage, AIMessage
 
 from fastapi import FastAPI, Request
@@ -17,10 +15,23 @@ bm25_indexes: dict = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+
     app.state.bm25_indexes = bm25_indexes
     app.state.agent_graph = build_graph()
+
+    driver = connect_neo4j_db()
+    driver.verify_connectivity() 
+    app.state.neo4j_graph_driver = driver
+
+    app.state.pinecone_index = connect_pinecone()
+
+    app.state.supabase_conn = get_supabase_conn()
     yield
+
+    app.state.supabase_conn.close()
+    app.state.neo4j_graph_driver.close() 
     bm25_indexes.clear()
+
 
 api = FastAPI(lifespan=lifespan)
 
@@ -67,8 +78,11 @@ def init():
     return "grant RAG project"
 
 @api.post("/injest")
-def add_domain(new_domain: DomainRequest) -> DomainResponse:
-    task = run_injest_pipeline.delay(new_domain)
+def add_domain(new_domain: DomainRequest, req: Request) -> DomainResponse:
+    task = run_injest_pipeline.delay(new_domain,
+                                     req.app.state.neo4j_graph_driver,
+                                     req.app.state.pinecone_index,
+                                     req.app.state.supabase_conn)
     return DomainResponse(task_id=task.id)
 
 @api.get("/poll_injest")
@@ -86,11 +100,12 @@ def deserialize_messages(messages: list[MessageDict]):
     return result
 
 
-@api.get("/query")
-async def get_chunks(input: QueryRequest, req: Request) -> QueryResponse:
+@api.post("/query")
+async def handle_query(input: QueryRequest, req: Request) -> QueryResponse:
     result = await req.app.state.agent_graph.ainvoke(
-        {"question": input.query, "domain": input.domain, "history": deserialize_messages(input.history)},
-        config={"configurable": {"bm25_indexes": req.app.state.bm25_indexes}}
+        {"query": input.query, "domain": input.domain, "history": deserialize_messages(input.history)},
+        config={"configurable": {"bm25_indexes": req.app.state.bm25_indexes,
+                                 "pinecone_index": req.app.state.pinecone_index}}
     )
     
     serialized_messages = [
@@ -98,4 +113,6 @@ async def get_chunks(input: QueryRequest, req: Request) -> QueryResponse:
         for m in result["history"]
     ]
     return QueryResponse(error=("error_msg" in result), 
-                         response=(result.get("error_msg", result.get("response"))), history=serialized_messages)
+                        sources=result.get("sources"),
+                        response=(result.get("error_msg", result.get("response"))), 
+                        history=serialized_messages)

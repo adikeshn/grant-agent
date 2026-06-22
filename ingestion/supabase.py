@@ -19,13 +19,12 @@ stop_words = {
     'all', 'each', 'both', 'more', 'also', 'about', 'into', 'through'
 }
 
-def get_conn():
+def get_supabase_conn():
     if link is None:
         raise ValueError("SUPABASE_LINK environment variable not set")
     return psycopg2.connect(link)
 
-def downstream_failure(ids):
-    conn = get_conn()
+def downstream_failure(ids, conn):
     cursor = conn.cursor()
     try:
         cursor.execute(
@@ -39,7 +38,6 @@ def downstream_failure(ids):
         raise e
     finally:
         cursor.close()
-        conn.close()
     return 200
 
 
@@ -57,7 +55,7 @@ def tokenize(text: str) -> list[str]:
 def get_ids(domain: str, cursor):
     try:
         cursor.execute(
-            "SELECT (id, text, award_id, source, year, amount, institution, directorate" +
+            "SELECT (id, text, award_id, source, year, amount, institution, directorate," +
             "pi_name) FROM chunks WHERE domain = %s",
             (domain,)
         )
@@ -110,13 +108,11 @@ def write_chunks(chunks: list[dict], cursor) -> None:
         c['metadata']["institution"], c['metadata']["directorate"], c['metadata']["pi_name"], c['metadata']['domain']
     ) for c in chunks])
 
-def ingest_batch(awards: list[dict]):
-    conn = None
+def ingest_batch(awards: list[dict], conn):
     cursor = None
     all_chunks = []
     ids = set()
     try:
-        conn = get_conn()
         cursor = conn.cursor()
         for award in awards:
             if is_already_ingested(award["award_id"], cursor):
@@ -131,5 +127,4 @@ def ingest_batch(awards: list[dict]):
         raise e
     finally:
         if cursor: cursor.close()
-        if conn: conn.close()
     return all_chunks, ids
