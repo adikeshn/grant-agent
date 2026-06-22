@@ -4,10 +4,9 @@ from ingestion.write_to_graph import connect_neo4j_db
 from ingestion.pinecone_db import connect_pinecone
 from ingestion.supabase import get_supabase_conn
 from langchain_core.messages import HumanMessage, AIMessage
-
+from .schemas import DomainRequest, DomainResponse, QueryRequest, QueryResponse, MessageDict
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from celery.result import AsyncResult
 
@@ -44,33 +43,6 @@ api.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-class DomainRequest(BaseModel):
-    name: str
-    fetch_nsf: bool = False
-    fetch_nih: bool = False
-    keywords: list[str] = []
-    date_from: str = ""
-    date_to: str = ""
-    max_results: int = 0
-
-class MessageDict(BaseModel):
-    role: str
-    content: str
-class QueryRequest(BaseModel):
-    query: str
-    domain: str
-    history: list[MessageDict] = []
-
-class QueryResponse(BaseModel):
-    error: bool
-    response: str
-    sources: list[dict] = []
-    history: list[dict]
-
-class DomainResponse(BaseModel):
-    task_id: str = ""
-    status: str = "Pending"
-    result: int = 0
 
 
 @api.get("/")
@@ -79,10 +51,7 @@ def init():
 
 @api.post("/injest")
 def add_domain(new_domain: DomainRequest, req: Request) -> DomainResponse:
-    task = run_injest_pipeline.delay(new_domain,
-                                     req.app.state.neo4j_graph_driver,
-                                     req.app.state.pinecone_index,
-                                     req.app.state.supabase_conn)
+    task = run_injest_pipeline.delay(new_domain.model_dump())
     return DomainResponse(task_id=task.id)
 
 @api.get("/poll_injest")
@@ -113,6 +82,6 @@ async def handle_query(input: QueryRequest, req: Request) -> QueryResponse:
         for m in result["history"]
     ]
     return QueryResponse(error=("error_msg" in result), 
-                        sources=result.get("sources"),
+                        sources=result.get("sources", []),
                         response=(result.get("error_msg", result.get("response"))), 
                         history=serialized_messages)

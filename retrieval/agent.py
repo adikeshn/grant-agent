@@ -11,8 +11,8 @@ from typing import TypedDict, Annotated
 import json
 
 def build_graph():
-    llm = ChatAnthropic(model_name="claude-sonnet-4-6", timeout=None, stop=None)
-
+    llm_sonnet = ChatAnthropic(model_name="claude-sonnet-4-6", timeout=None, stop=None)
+    llm_haiku = ChatAnthropic(model_name="claude-3-5-haiku-20241022", timeout=None, stop=None)
     class GrantState(TypedDict):
 
         query: str
@@ -32,7 +32,7 @@ def build_graph():
 
     def classify_retrieval(state: GrantState) -> dict:
         try:
-            response = llm.invoke([
+            response = llm_haiku.invoke([
                 SystemMessage(content=CLASSIFIER_SYSTEM_PROMPT),
                 HumanMessage(content=state["query"])
             ])
@@ -65,7 +65,7 @@ def build_graph():
             top_k_chunks = retrieve_chunk_rankings(bm25_indexes=bm25_indexes, pinecone_index=pinecone_index, domain=state["domain"],
                                     query_text=state["query"], top_dense=state["top_k"]*4, top_sparse=state["top_k"]*4,
                                     top_final=state["top_k"])
-
+            
             return {"chunks": [chunk[1][1] for chunk in top_k_chunks], "sources": [chunk[2] for chunk in top_k_chunks]}
 
 
@@ -84,7 +84,7 @@ def build_graph():
             {context}
             Answer the question using only the abstracts above as well as any prior chat history.""")]
                 
-            response = llm.invoke(messages)
+            response = llm_sonnet.invoke(messages)
                 
             return {"response": response.content, "history": [
                 HumanMessage(content=state["query"]),
@@ -122,7 +122,7 @@ def build_graph():
         route_after_classify, {
             "END": END,
             "chunk_retrieval": "chunk_retrieval",
-            "graph_retrieval": END # not implemented yet
+            "graph_retrieval": END
         }
     )
     graph.add_conditional_edges(
