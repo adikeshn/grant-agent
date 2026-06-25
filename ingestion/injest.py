@@ -26,6 +26,7 @@ def run_injest_pipeline(inj_data: dict):
         neo4j_index.verify_connectivity()
     except Exception as e:
         print(f"error when connecting to services: {e}")
+        raise e
     
     try:
         data, domain = fetch_grant_data(inj_domain)
@@ -45,7 +46,6 @@ def run_injest_pipeline(inj_data: dict):
             downstream_failure(ids, supabase_conn)
         print(f"Error: {e}")
         raise e
-    print("successful pinecone upsert")
     return len(chunks)
 
 def gen_topics_methods(data: list[dict]) -> None:

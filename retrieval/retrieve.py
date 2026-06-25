@@ -85,8 +85,8 @@ def get_candidate_entities(neo4j_driver, user_query: str, domain: str) -> dict:
     return candidates
 
 def run_cypher_queries(llm_response, domain, driver):
-    raw = llm_response.text.strip()
 
+    raw = llm_response.replace("```json", "").replace("```", "").strip()
     cypher_queries = json.loads(raw)
 
     results = []
@@ -116,5 +116,11 @@ def run_cypher_queries(llm_response, domain, driver):
         except Exception as e:
             print(f"query execution failed: {cypher}")
             continue
+    formatted = []
+    for r in results:
+        lines = [f"# {r['purpose']}"]
+        for row in r["rows"]:
+            lines.append(", ".join(f"{k}: {v}" for k, v in row.items()))
+        formatted.append("\n".join(lines))
+    return formatted
 
-    return [json.dumps(results)]
