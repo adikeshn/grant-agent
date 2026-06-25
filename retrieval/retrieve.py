@@ -1,19 +1,17 @@
 from ingestion.pinecone_db import dense_retrieval
 from ingestion.supabase import get_bm_25, tokenize, get_supabase_conn, get_ids
 from ingestion.celery_app import app
-
+import json
 from sentence_transformers import CrossEncoder
 
 model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
-def retrieve_chunk_rankings(bm25_indexes, pinecone_index, domain: str,
+def retrieve_chunk_rankings(bm25_indexes, pinecone_index, supabase_conn, domain: str,
                             query_text: str, top_dense: int, top_sparse: int, 
                             top_final: int, rrf_k: int = 60):
-    conn = None
     cursor = None
     try:
-        conn = get_supabase_conn()
-        cursor = conn.cursor()
+        cursor = supabase_conn.cursor()
 
         # get sparse and dense rankings
         dense_results = dense_retrieval(query_txt=query_text, namespace=domain, k=top_dense, index=pinecone_index)
@@ -48,16 +46,75 @@ def retrieve_chunk_rankings(bm25_indexes, pinecone_index, domain: str,
 
 
     except Exception as e:
-        if conn: conn.rollback()
+        supabase_conn.rollback()
         print(f"Error during retrieval: {e}")
         raise e
 
     finally:
         if cursor: cursor.close()
-        if conn: conn.close()
 
 
+def get_candidate_entities(neo4j_driver, user_query: str, domain: str) -> dict:
+    with neo4j_driver.session() as session:
+        fuzzy_query = " ".join(f"{word}~" for word in user_query.split())
 
+        candidates = {}
 
+        for entity_type, index_name, label_property in [
+            ("topic", "topicNames", "label"),
+            ("method", "methodNames", "name"),
+            ("directorate", "directorateNames", "name"),
+            ("pi", "piNames", "name"),
+            ("institution", "institutionNames", "name"),
+        ]:
+            result = session.run(
+                """
+                CALL db.index.fulltext.queryNodes($index, $query)
+                YIELD node, score
+                WHERE score > 0.5
+                RETURN node[$prop] AS name, score
+                ORDER BY score DESC
+                LIMIT 5
+                """,
+                index=index_name,
+                query=fuzzy_query,
+                prop=label_property
+            )
+            candidates[entity_type] = [r["name"] for r in result]
 
+    return candidates
 
+def run_cypher_queries(llm_response, domain, driver):
+    raw = llm_response.text.strip()
+
+    cypher_queries = json.loads(raw)
+
+    results = []
+    forbidden_keywords = {"create", "delete", "merge", "set", "remove", "drop"}
+
+    for query_obj in cypher_queries:
+        cypher = query_obj["cypher"]
+        purpose = query_obj["purpose"]
+
+        cypher_lower = cypher.lower()
+        if any(kw in cypher_lower for kw in forbidden_keywords):
+            print(f"Rejected unsafe query: {cypher}")
+            continue
+
+        if f'"{domain}"' not in cypher:
+            print(f"Rejected unscoped query: {cypher}")
+            continue
+
+        try:
+            with driver.session() as session:
+                result = session.run(cypher)
+                rows = [dict(r) for r in result]
+                results.append({
+                    "purpose": purpose,
+                    "rows": rows
+                })
+        except Exception as e:
+            print(f"query execution failed: {cypher}")
+            continue
+
+    return [json.dumps(results)]

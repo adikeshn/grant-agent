@@ -20,7 +20,7 @@ dependencies = [
     "python-dotenv",
 
     # Pinecone
-    "pinecone-client",
+    "pinecone",
 
     # LangChain / LangGraph
     "langchain-anthropic",

@@ -1,4 +1,4 @@
-from api.api import DomainRequest
+from api.schemas import DomainRequest
 
 from .normalize import normalize
 
@@ -6,53 +6,78 @@ import xml.etree.ElementTree as ET
 import requests
 import yaml
 from pathlib import Path
-from datetime import date
+from datetime import datetime, date
 
 def load_config(yaml_file_path: str):
     path = Path(f"config/{yaml_file_path}.yaml")
     with open(path) as f:
         return yaml.safe_load(f)
     
-def fetch_nsf(inj_domain: DomainRequest) -> list[dict]:
+import requests
 
+def fetch_nsf(inj_domain: DomainRequest) -> list[dict]:
     url = "http://api.nsf.gov/services/v1/awards.json"
     seen_ids = set()
-    query_string = [f'"{keyword}"' for keyword in inj_domain.keywords]
-    offset = 1
     awards = []
     max_results = inj_domain.max_results
+
+    def nsf_quote(keyword: str) -> str:
+        return f'"{keyword}"' if " " in keyword else keyword
+
+    query_string = " OR ".join(nsf_quote(k) for k in inj_domain.keywords[0:3])
+
+    def to_nsf_date(date_str: str) -> str:
+        if not date_str:
+            return ""
+        try:
+            d = datetime.strptime(date_str, "%Y-%m-%d")
+            return d.strftime("%m/%d/%Y")
+        except ValueError:
+            return date_str
+
+    date_from = to_nsf_date(inj_domain.date_from) or "01/01/2000"
+
+    offset = 0  
+ 
     while len(awards) < max_results:
-        curr_results = min(25, max_results - offset + 1)
+        rpp = min(25, max_results - len(awards))
+
         query_parameters = {
             "keyword": query_string,
-            "startDateStart": inj_domain.date_from,
-            "rpp": curr_results,       
-            "offset": offset     
+            "startDateStart": date_from,
+            "rpp": rpp,
+            "offset": offset
         }
 
         response = requests.get(url, params=query_parameters)
-        if response.status_code == 200:
-            data = response.json()
-            award_list = data.get("response", {}).get("award", [])
-            if not award_list:
-                print("no more awards")
-                break
-            else:
-                for award in award_list:
-                    proj_id = award.get("id", "")
-                    if proj_id and proj_id not in seen_ids:
-                        seen_ids.add(proj_id)
-                        awards.append(award)
-                offset += curr_results
-            
-        else:
+        if response.status_code != 200:
             print(f"Error {response.status_code}: {response.text}")
             break
+
+        data = response.json()
+
+        if "serviceNotification" in data.get("response", {}):
+            print(f"NSF API error: {data['response']['serviceNotification']}")
+            break
+
+        award_list = data.get("response", {}).get("award", [])
+        if not award_list:
+            print("no more awards")
+            break
+
+        for award in award_list:
+            proj_id = award.get("id", "")
+            if proj_id and proj_id not in seen_ids:
+                seen_ids.add(proj_id)
+                awards.append(award)
+
+        offset += rpp
+
     return awards
 
 def fetch_nih(inj_domain: DomainRequest) -> list[dict]:
     date_from = inj_domain.date_from
-    date_to = inj_domain.date_to or date.today().strftime("%Y-%m-%d")
+    date_to = inj_domain.date_to
     all_results = []
     seen_ids = set()
     payload = {
@@ -95,12 +120,14 @@ def fetch_nih(inj_domain: DomainRequest) -> list[dict]:
 
 
 def fetch_grant_data(new_domain: DomainRequest):
-    awards_nih, awards_nsf = []
+    new_domain.date_to = new_domain.date_to or date.today().strftime("%Y-%m-%d")
+    awards_nih, awards_nsf = [], []
     if new_domain.fetch_nih:
         awards_nih = fetch_nih(new_domain)
     if new_domain.fetch_nsf:
         awards_nsf = fetch_nsf(new_domain)
-
+    print("fetched NIH" + str(len(awards_nih)))
+    print("fetched NSF" + str(len(awards_nsf)))
     all_awards = []
     for award in awards_nsf + awards_nih:
         n_award = normalize(award)

@@ -74,7 +74,9 @@ async def handle_query(input: QueryRequest, req: Request) -> QueryResponse:
     result = await req.app.state.agent_graph.ainvoke(
         {"query": input.query, "domain": input.domain, "history": deserialize_messages(input.history)},
         config={"configurable": {"bm25_indexes": req.app.state.bm25_indexes,
-                                 "pinecone_index": req.app.state.pinecone_index}}
+                                 "pinecone_index": req.app.state.pinecone_index,
+                                 "supabase_conn": req.app.state.supabase_conn, 
+                                 "neo4j_driver": req.app.state.neo4j_graph_driver}}
     )
     
     serialized_messages = [

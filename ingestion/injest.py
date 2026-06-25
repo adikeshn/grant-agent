@@ -1,6 +1,5 @@
 from api.schemas import DomainRequest
 import os
-import anthropic
 import json
 from dotenv import load_dotenv
 import time
@@ -9,6 +8,8 @@ from .pinecone_db import upsert, connect_pinecone
 from .supabase import ingest_batch, downstream_failure, get_supabase_conn
 from .celery_app import app
 from .write_to_graph import ingest_graph_nodes, connect_neo4j_db
+import google.generativeai.generative_models as genai
+from google.generativeai.client import configure
 
 load_dotenv()
 
@@ -48,10 +49,12 @@ def run_injest_pipeline(inj_data: dict):
     return len(chunks)
 
 def gen_topics_methods(data: list[dict]) -> None:
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    configure(api_key=os.getenv("GEMINI_API_KEY"))
+    model = genai.GenerativeModel(model_name="gemini-2.5-flash-lite")
     batch_size = 5
 
     for i in range(0, len(data), batch_size):
+        print(f"processing batch {i + 1}")
         batch = data[i: i + batch_size]
 
         batch_input = [
@@ -70,13 +73,10 @@ Abstracts:
 {json.dumps(batch_input, indent=2)}"""
 
         try:
-            response = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=1000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            raw = response.content[0].text.strip()
+            print("sending prompt")
+            response = model.generate_content(prompt)
+            print("received output")
+            raw = response.text.strip()
             raw = raw.replace("```json", "").replace("```", "").strip()
             results = json.loads(raw)
 
@@ -94,7 +94,6 @@ Abstracts:
 
         if i + batch_size < len(data):
             time.sleep(12)
-
 
 def _normalize_tags(tags: list) -> list[str]:
     seen = set()

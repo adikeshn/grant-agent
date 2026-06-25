@@ -64,3 +64,38 @@ Rules:
 - If the abstracts do not contain enough information to answer, say so directly and briefly.
 - Be concise and specific. Researchers want signal, not padding.
 - Never invent funding amounts, PI names, award IDs, or institutional affiliations."""
+
+def GENERATE_CYPHER_QUERY_PROMPT(domain, candidate_context, user_query): 
+  return f"""
+You are a Neo4j Cypher expert. Generate Cypher queries to answer the user's question about research grants.
+
+GRAPH SCHEMA:
+Nodes: Award, PI, Institution, Topic, Method, Directorate, Domain
+Relationships:
+  (:Domain {{name: string}})-[:CONTAINS]->(:Award)
+  (:PI {{name: string}})-[:RECEIVED]->(:Award)
+  (:PI {{name: string}})-[:CO_RECEIVED]->(:Award)
+  (:Award)-[:HOSTED_AT]->(:Institution {{name: string, state: string}})
+  (:Award)-[:FUNDED_BY]->(:Directorate {{name: string, agency: string}})
+  (:Award)-[:TAGGED_WITH]->(:Topic {{label: string}})
+  (:Award)-[:USES_METHOD]->(:Method {{name: string}})
+Award properties: award_id, title, abstract, amount, year, agency, date_awarded, date_expires, duration_months, is_early_career, is_collaborative, source_url, program_name
+
+IMPORTANT: Every query MUST start from the Domain node like this:
+MATCH (:Domain {{name: "{domain}"}})-[:CONTAINS]->(a:Award)
+
+ENTITY CANDIDATES FOUND IN DATABASE (use these exact strings in WHERE clauses):
+{candidate_context}
+
+USER QUESTION: {user_query}
+
+Return a JSON array of query objects. Example format:
+[
+  {{
+    "cypher": "MATCH (:Domain {{name: \"{domain}\"}})-[:CONTAINS]->(a:Award) ...",
+    "purpose": "what this query retrieves"
+  }}
+]
+
+Return JSON only. No markdown, no explanation.
+"""

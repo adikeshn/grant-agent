@@ -1,5 +1,5 @@
-from .system_msg import CLASSIFIER_SYSTEM_PROMPT, SYNTHESIS_SYSTEM_PROMPT
-from .retrieve import retrieve_chunk_rankings
+from .system_msg import CLASSIFIER_SYSTEM_PROMPT, SYNTHESIS_SYSTEM_PROMPT, GENERATE_CYPHER_QUERY_PROMPT
+from .retrieve import retrieve_chunk_rankings, get_candidate_entities, run_cypher_queries
 
 from langchain_anthropic import ChatAnthropic
 from anthropic import RateLimitError, APIStatusError
@@ -9,10 +9,18 @@ from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict, Annotated
 import json
+from json import JSONDecodeError
+import os
+from dotenv import load_dotenv
+import google.generativeai.generative_models as genai
+from google.generativeai.client import configure
+
+load_dotenv()
 
 def build_graph():
+    configure(api_key=os.getenv("GEMINI_API_KEY"))
+    gemini_model = genai.GenerativeModel(model_name="gemini-2.5-flash-lite")
     llm_sonnet = ChatAnthropic(model_name="claude-sonnet-4-6", timeout=None, stop=None)
-    llm_haiku = ChatAnthropic(model_name="claude-3-5-haiku-20241022", timeout=None, stop=None)
     class GrantState(TypedDict):
 
         query: str
@@ -32,26 +40,26 @@ def build_graph():
 
     def classify_retrieval(state: GrantState) -> dict:
         try:
-            response = llm_haiku.invoke([
-                SystemMessage(content=CLASSIFIER_SYSTEM_PROMPT),
-                HumanMessage(content=state["query"])
-            ])
+            prompt = f"{CLASSIFIER_SYSTEM_PROMPT}\n\n{state['query']}"
+            response = gemini_model.generate_content(prompt)
 
-            content = response.content
-            if not isinstance(content, str):
+            content = response.text
+            if not content:
                 return {"error_msg": "Classifier returned no text content"}
 
-            res = json.loads(content)
-
-        except RateLimitError:
-            print("API rate limit error")
-            return {"error_msg": "Rate limit exceeded, wait a bit so that my limit resets"}
-        except APIStatusError as e:
-            print(f"API error: {e.status_code} — {e.message}")
-            return {"error_msg": f"API Error: {e.status_code} - {e.message}"}
-        except json.JSONDecodeError as e:
+            clean = content.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            res = json.loads(clean)
+        
+        except JSONDecodeError as e:
             return {"error_msg": f"Classifier returned invalid JSON: {e}"}
         except Exception as e:
+            err = str(e).lower()
+            if "quota" in err or "rate" in err or "429" in err:
+                print("API rate limit error")
+                return {"error_msg": "Rate limit exceeded, wait a bit so that my limit resets"}
+            if "invalid" in err or "api" in err:
+                print(f"API error: {e}")
+                return {"error_msg": f"API Error: {e}"}
             return {"error_msg": f"Error during retrieval classification: {e}"}
 
         return res
@@ -62,7 +70,8 @@ def build_graph():
             if "configurable" in config:
                 bm25_indexes = config["configurable"]["bm25_indexes"]
                 pinecone_index = config["configurable"]["pinecone_index"]
-            top_k_chunks = retrieve_chunk_rankings(bm25_indexes=bm25_indexes, pinecone_index=pinecone_index, domain=state["domain"],
+                supabase_conn = config["configurable"]["supabase_conn"]
+            top_k_chunks = retrieve_chunk_rankings(bm25_indexes=bm25_indexes, pinecone_index=pinecone_index, supabase_conn=supabase_conn, domain=state["domain"],
                                     query_text=state["query"], top_dense=state["top_k"]*4, top_sparse=state["top_k"]*4,
                                     top_final=state["top_k"])
             
@@ -72,6 +81,38 @@ def build_graph():
         except Exception as e:
             print("exception during chunk retrieval")
             return {"error_msg": f"Exception during chunk retrieval: {e}"}
+
+    def graph_retrieval(state: GrantState, config: RunnableConfig) -> dict:
+        try:
+            if "configurable" in config:
+                neo4j_driver = config["configurable"]["neo4j_driver"]
+
+            user_query = state["query"]
+            domain = state["domain"]
+
+            candidates = get_candidate_entities(neo4j_driver, user_query, domain)
+
+            candidate_context = "\n".join([
+                f"{entity_type}: {', '.join(names)}"
+                for entity_type, names in candidates.items()
+                if names
+            ])
+            prompt = GENERATE_CYPHER_QUERY_PROMPT(domain, candidate_context, user_query)
+            response = gemini_model.generate_content(prompt)
+            results = run_cypher_queries(response, domain, neo4j_driver)
+            
+            sources = []
+            for result_json in results:
+                for query_result in json.loads(result_json):
+                    for row in query_result.get("rows", []):
+                        title = row.get("title") or row.get("a.title")
+                        if title and title not in sources:
+                            sources.append(title)
+
+            return {"chunks": results, "sources": sources}
+        except Exception as e:
+            print("exception during graph retrieval")
+            return {"error_msg": f"Exception during graph retrieval: {e}"}
 
     def invoke_llm(state: GrantState) -> dict:
         try:
@@ -106,7 +147,7 @@ def build_graph():
             return "END"
         
     def route_after_retrieval(state: GrantState) -> str:
-        if "error_msg" in state or "chunks" not in state or "sources" not in state:
+        if "error_msg" in state or "chunks" not in state:
             return "END"
         return "invoke_llm"
     
@@ -114,7 +155,7 @@ def build_graph():
     graph.add_node("classify_query", classify_retrieval)
     graph.add_node("chunk_retrieval", chunk_retrieval)
     graph.add_node("invoke_llm", invoke_llm)
-
+    graph.add_node("graph_retrieval", graph_retrieval)
 
     graph.add_edge(START, "classify_query")
     graph.add_conditional_edges(
@@ -122,11 +163,19 @@ def build_graph():
         route_after_classify, {
             "END": END,
             "chunk_retrieval": "chunk_retrieval",
-            "graph_retrieval": END
+            "graph_retrieval": "graph_retrieval"
         }
     )
     graph.add_conditional_edges(
         "chunk_retrieval",
+        route_after_retrieval, {
+            "END": END,
+            "invoke_llm": "invoke_llm"
+        }
+    )
+
+    graph.add_conditional_edges(
+        "graph_retrieval",
         route_after_retrieval, {
             "END": END,
             "invoke_llm": "invoke_llm"
