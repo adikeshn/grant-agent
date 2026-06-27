@@ -86,7 +86,7 @@ def get_candidate_entities(neo4j_driver, user_query: str, domain: str) -> dict:
 
 def run_cypher_queries(llm_response, domain, driver):
 
-    raw = llm_response.replace("```json", "").replace("```", "").strip()
+    raw = llm_response.text.replace("```json", "").replace("```", "").strip()
     cypher_queries = json.loads(raw)
 
     results = []

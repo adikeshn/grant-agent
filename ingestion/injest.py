@@ -3,6 +3,7 @@ import os
 import json
 from dotenv import load_dotenv
 import time
+import re
 from .fetch_grants import fetch_grant_data
 from .pinecone_db import upsert, connect_pinecone
 from .supabase import ingest_batch, downstream_failure, get_supabase_conn
@@ -52,9 +53,10 @@ def gen_topics_methods(data: list[dict]) -> None:
     configure(api_key=os.getenv("GEMINI_API_KEY"))
     model = genai.GenerativeModel(model_name="gemini-2.5-flash-lite")
     batch_size = 5
+    i = 0
 
-    for i in range(0, len(data), batch_size):
-        print(f"processing batch {i + 1}")
+    while i < len(data):
+        print(f"processing batch {i // batch_size + 1}")
         batch = data[i: i + batch_size]
 
         batch_input = [
@@ -86,15 +88,26 @@ Abstracts:
                 award["topics"] = _normalize_tags(matched.get("topics", []))
                 award["methods"] = _normalize_tags(matched.get("methods", []))
 
+            i += batch_size
+            if i < len(data):
+                time.sleep(12)
+
         except (json.JSONDecodeError, KeyError, IndexError) as e:
-            print(f"LLM extraction failed for batch {i // batch_size}: {e} — defaulting to empty")
+            print(f"LLM extraction failed for batch {i // batch_size + 1}: {e} — defaulting to empty")
             for award in batch:
                 award.setdefault("topics", [])
                 award.setdefault("methods", [])
+            i += batch_size
 
-        if i + batch_size < len(data):
-            time.sleep(12)
-
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "quota" in err_str.lower():
+                match = re.search(r"retry_delay\s*\{\s*seconds:\s*(\d+)", err_str)
+                wait = int(match.group(1)) + 5 if match else 300
+                print(f"Rate limit hit, waiting {wait}s before retrying batch {i // batch_size + 1}...")
+                time.sleep(wait)
+            else:
+                raise
 def _normalize_tags(tags: list) -> list[str]:
     seen = set()
     out = []
