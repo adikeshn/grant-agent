@@ -99,15 +99,14 @@ def build_graph():
             ])
             prompt = GENERATE_CYPHER_QUERY_PROMPT(domain, candidate_context, user_query)
             response = gemini_model.generate_content(prompt)
-            results = run_cypher_queries(response, domain, neo4j_driver)
-            
+            results, structured = run_cypher_queries(response, domain, neo4j_driver)
+
             sources = []
-            for result_json in results:
-                for query_result in json.loads(result_json):
-                    for row in query_result.get("rows", []):
-                        title = row.get("title") or row.get("a.title")
-                        if title and title not in sources:
-                            sources.append(title)
+            for query_result in structured:
+                for row in query_result.get("rows", []):
+                    title = row.get("title") or row.get("a.title")
+                    if title and title not in sources:
+                        sources.append(title)
 
             return {"chunks": results, "sources": sources}
         except Exception as e:
@@ -137,6 +136,8 @@ def build_graph():
 
 
     def route_after_classify(state: GrantState) -> str:
+        print("chosen path: " + state.get("path", "N/A"))
+        print("reasoning: " + state.get("reasoning", "N/A"))
         if "error_msg" in state or state.get("path", "") == "":
             return "END"
         elif state.get("path") == "chunk":

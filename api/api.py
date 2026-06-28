@@ -2,9 +2,10 @@ from ingestion.injest import run_injest_pipeline
 from retrieval.agent import build_graph
 from ingestion.write_to_graph import connect_neo4j_db
 from ingestion.pinecone_db import connect_pinecone
-from ingestion.supabase import get_supabase_conn
+from ingestion.celery_app import app as celery_app
+from ingestion.supabase import get_supabase_conn, get_unique_domains
 from langchain_core.messages import HumanMessage, AIMessage
-from .schemas import DomainRequest, DomainResponse, QueryRequest, QueryResponse, MessageDict
+from .schemas import DomainRequest, DomainResponse, QueryRequest, QueryResponse, MessageDict, DomainNamesResponse
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -49,6 +50,11 @@ api.add_middleware(
 def init():
     return "grant RAG project"
 
+@api.get("/domains")
+def get_domain_names(req: Request):
+    domains = get_unique_domains(req.app.state.supabase_conn)
+    return DomainNamesResponse(unique_domains=domains)
+
 @api.post("/injest")
 def add_domain(new_domain: DomainRequest, req: Request) -> DomainResponse:
     task = run_injest_pipeline.delay(new_domain.model_dump())
@@ -56,8 +62,8 @@ def add_domain(new_domain: DomainRequest, req: Request) -> DomainResponse:
 
 @api.get("/poll_injest")
 def poll_injest_response(task_id: str = "") -> DomainResponse:
-    task = AsyncResult(task_id)
-    return DomainResponse(task_id=task_id, status=task.status, result=task.result)
+    task = AsyncResult(task_id, app=celery_app)
+    return DomainResponse(task_id=task_id, status=task.status, result=task.result or 0)
 
 def deserialize_messages(messages: list[MessageDict]):
     result = []

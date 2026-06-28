@@ -23,15 +23,11 @@ def retrieve_chunk_rankings(bm25_indexes, pinecone_index, supabase_conn, domain:
         sparse_results = bm25_indexes[domain]["index"].get_top_n(tokenize(query_text), bm25_indexes[domain]["ids"], n=top_sparse)
         
         # calculate reciprocal rank fusion
-        print("\n=== DENSE RETRIEVAL RANKINGS ===")
         for rank, match in enumerate(dense_results.matches):
             chunk_dict[match.id][0] += (1 / (rank + 1 + rrf_k))
-            print(f"Rank {rank + 1}: {match.id}, {match.score}")
 
-        print("\n=== SPARSE RETRIEVAL RANKINGS ===")
         for rank, item in enumerate(sparse_results, 1):
             chunk_dict[item][0] += (1 / (rank + rrf_k))
-            print(f"Rank {rank}: {item}")
 
         # do reranking with cross encoder
         cross_encode_inp = []
@@ -60,25 +56,30 @@ def get_candidate_entities(neo4j_driver, user_query: str, domain: str) -> dict:
 
         candidates = {}
 
-        for entity_type, index_name, label_property in [
-            ("topic", "topicNames", "label"),
-            ("method", "methodNames", "name"),
-            ("directorate", "directorateNames", "name"),
-            ("pi", "piNames", "name"),
-            ("institution", "institutionNames", "name"),
+        for entity_type, index_name, label_property, to_award_cypher in [
+            ("topic",       "topicNames",       "label", "MATCH (a:Award)-[:TAGGED_WITH]->(node)"),
+            ("method",      "methodNames",       "name",  "MATCH (a:Award)-[:USES_METHOD]->(node)"),
+            ("directorate", "directorateNames",  "name",  "MATCH (a:Award)-[:FUNDED_BY]->(node)"),
+            ("pi",          "piNames",           "name",  "MATCH (node)-[:RECEIVED]->(a:Award)"),
+            ("institution", "institutionNames",  "name",  "MATCH (a:Award)-[:HOSTED_AT]->(node)"),
         ]:
             result = session.run(
-                """
-                CALL db.index.fulltext.queryNodes($index, $query)
+                f"""
+                CALL db.index.fulltext.queryNodes($index, $search_query)
                 YIELD node, score
                 WHERE score > 0.5
+                AND EXISTS {{
+                    {to_award_cypher}
+                    MATCH (dom:Domain {{name: $domain}})-[:CONTAINS]->(a)
+                }}
                 RETURN node[$prop] AS name, score
                 ORDER BY score DESC
                 LIMIT 5
                 """,
                 index=index_name,
-                query=fuzzy_query,
-                prop=label_property
+                search_query=fuzzy_query,
+                prop=label_property,
+                domain=domain,
             )
             candidates[entity_type] = [r["name"] for r in result]
 
@@ -122,5 +123,5 @@ def run_cypher_queries(llm_response, domain, driver):
         for row in r["rows"]:
             lines.append(", ".join(f"{k}: {v}" for k, v in row.items()))
         formatted.append("\n".join(lines))
-    return formatted
+    return formatted, results  
 

@@ -1,4 +1,3 @@
-from api.schemas import DomainRequest
 import os
 import json
 from dotenv import load_dotenv
@@ -18,7 +17,6 @@ load_dotenv()
 def run_injest_pipeline(inj_data: dict):
     ids = []
     chunks = []
-    inj_domain = DomainRequest(**inj_data)
 
     try:
         supabase_conn = get_supabase_conn()
@@ -30,7 +28,7 @@ def run_injest_pipeline(inj_data: dict):
         raise e
     
     try:
-        data, domain = fetch_grant_data(inj_domain)
+        data, domain = fetch_grant_data(inj_data)
         print(f"fetched {len(data)} awards")
         print("generating topics and methods")
         gen_topics_methods(data)

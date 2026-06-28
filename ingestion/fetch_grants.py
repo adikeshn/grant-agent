@@ -1,30 +1,18 @@
-from api.schemas import DomainRequest
-
 from .normalize import normalize
-
-import xml.etree.ElementTree as ET
 import requests
-import yaml
-from pathlib import Path
 from datetime import datetime, date
 
-def load_config(yaml_file_path: str):
-    path = Path(f"config/{yaml_file_path}.yaml")
-    with open(path) as f:
-        return yaml.safe_load(f)
-    
-import requests
 
-def fetch_nsf(inj_domain: DomainRequest) -> list[dict]:
+def fetch_nsf(inj_domain: dict) -> list[dict]:
     url = "http://api.nsf.gov/services/v1/awards.json"
     seen_ids = set()
     awards = []
-    max_results = inj_domain.max_results
+    max_results = inj_domain["max_results"]
 
     def nsf_quote(keyword: str) -> str:
         return f'"{keyword}"' if " " in keyword else keyword
 
-    query_string = " OR ".join(nsf_quote(k) for k in inj_domain.keywords[0:3])
+    query_string = " OR ".join(nsf_quote(k) for k in inj_domain["keywords"][0:min(len(inj_domain["keywords"]), 3)])
 
     def to_nsf_date(date_str: str) -> str:
         if not date_str:
@@ -35,10 +23,9 @@ def fetch_nsf(inj_domain: DomainRequest) -> list[dict]:
         except ValueError:
             return date_str
 
-    date_from = to_nsf_date(inj_domain.date_from) or "01/01/2000"
+    date_from = to_nsf_date(inj_domain["date_from"]) or "01/01/2000"
+    offset = 0
 
-    offset = 0  
- 
     while len(awards) < max_results:
         rpp = min(25, max_results - len(awards))
 
@@ -46,7 +33,7 @@ def fetch_nsf(inj_domain: DomainRequest) -> list[dict]:
             "keyword": query_string,
             "startDateStart": date_from,
             "rpp": rpp,
-            "offset": offset
+            "offset": offset,
         }
 
         response = requests.get(url, params=query_parameters)
@@ -75,39 +62,41 @@ def fetch_nsf(inj_domain: DomainRequest) -> list[dict]:
 
     return awards
 
-def fetch_nih(inj_domain: DomainRequest) -> list[dict]:
-    date_from = inj_domain.date_from
-    date_to = inj_domain.date_to
+
+def fetch_nih(inj_domain: dict) -> list[dict]:
+    date_from = inj_domain["date_from"]
+    date_to = inj_domain["date_to"]
     all_results = []
     seen_ids = set()
+
     payload = {
         "criteria": {
-            'advanced_text_search': { 
-                'operator': "and", 
-                'search_field': "projecttitle,terms,abstracttext", 
-                "search_text": ' OR '.join(f"\"{keyword}\"" for keyword in inj_domain.keywords)},
+            "advanced_text_search": {
+                "operator": "and",
+                "search_field": "projecttitle,terms,abstracttext",
+                "search_text": " OR ".join(f'"{k}"' for k in inj_domain["keywords"]),
+            },
             "award_notice_date": {
                 "from_date": date_from,
-                "to_date": date_to
+                "to_date": date_to,
             },
         },
-        "limit": inj_domain.max_results,
+        "limit": inj_domain["max_results"],
         "offset": 0,
         "fields": [
             "ProjectNum", "ProjectTitle", "AbstractText",
             "PrincipalInvestigator", "Organization",
             "AwardAmount", "ProjectStartDate", "ProjectEndDate",
-            "AgencyIcAdmin"
-        ]
+            "AgencyIcAdmin",
+        ],
     }
 
     response = requests.post(
         "https://api.reporter.nih.gov/v2/projects/search",
-        json=payload
+        json=payload,
     )
     if response.status_code == 200:
         results = response.json().get("results", [])
-
         for result in results:
             pid = result.get("project_serial_num", "")
             if pid and pid not in seen_ids:
@@ -119,24 +108,25 @@ def fetch_nih(inj_domain: DomainRequest) -> list[dict]:
     return all_results
 
 
-def fetch_grant_data(new_domain: DomainRequest):
-    new_domain.date_to = new_domain.date_to or date.today().strftime("%Y-%m-%d")
+def fetch_grant_data(inj_domain: dict) -> tuple[list[dict], str]:
+    date_to = inj_domain["date_to"] or date.today().strftime("%Y-%m-%d")
+    inj_domain = {**inj_domain, "date_to": date_to}
+
     awards_nih, awards_nsf = [], []
-    if new_domain.fetch_nih:
-        awards_nih = fetch_nih(new_domain)
-    if new_domain.fetch_nsf:
-        awards_nsf = fetch_nsf(new_domain)
-    print("fetched NIH" + str(len(awards_nih)))
-    print("fetched NSF" + str(len(awards_nsf)))
+    if inj_domain["fetch_nih"]:
+        awards_nih = fetch_nih(inj_domain)
+    if inj_domain["fetch_nsf"]:
+        awards_nsf = fetch_nsf(inj_domain)
+
+    print(f"fetched NIH {len(awards_nih)}")
+    print(f"fetched NSF {len(awards_nsf)}")
+
     all_awards = []
     for award in awards_nsf + awards_nih:
         n_award = normalize(award)
         if n_award is None:
             raise Exception("Error with normalizing")
-        n_award["domain"] = new_domain.name
+        n_award["domain"] = inj_domain["name"]
         all_awards.append(n_award)
 
-    return all_awards, new_domain.name
-
-
-
+    return all_awards, inj_domain["name"]

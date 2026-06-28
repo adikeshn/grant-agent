@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from rank_bm25 import BM25Okapi
 import os
 
+
 load_dotenv()
 
 link = os.getenv("SUPABASE_LINK")
@@ -40,7 +41,12 @@ def downstream_failure(ids, conn):
         cursor.close()
     return 200
 
-
+def get_unique_domains(conn) -> list[str]:
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT DISTINCT domain FROM chunks WHERE domain IS NOT NULL ORDER BY domain;")
+        rows = cursor.fetchall()
+    return [row[0] for row in rows]   
+ 
 def is_already_ingested(award_id: str, cursor) -> bool:
     cursor.execute(
         "SELECT 1 FROM chunks WHERE award_id = %s LIMIT 1",
@@ -55,11 +61,12 @@ def tokenize(text: str) -> list[str]:
 def get_ids(domain: str, cursor):
     try:
         cursor.execute(
-            "SELECT (id, text, award_id, source, year, amount, institution, directorate," +
-            "pi_name) FROM chunks WHERE domain = %s",
+            "SELECT id, text, award_id, source, year, amount, institution, directorate," +
+            "pi_name FROM chunks WHERE domain = %s",
             (domain,)
         )
         return {row[0]: [0, row[1], {
+            "title": row[1].split("Title:")[1].split("PI:")[0].strip(),
             "award_id": row[2],
             "source": row[3],
             "year": row[4],

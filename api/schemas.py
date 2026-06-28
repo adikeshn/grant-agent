@@ -10,6 +10,9 @@ class DomainRequest(BaseModel):
     date_to: str = ""
     max_results: int = 0
 
+class DomainNamesResponse(BaseModel):
+    unique_domains: list[str] = []
+
 class MessageDict(BaseModel):
     role: str
     content: str
