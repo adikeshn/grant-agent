@@ -39,6 +39,7 @@ api.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+        "https://grant-agent-gold.vercel.app/"
     ],
     allow_credentials=True,
     allow_methods=["*"],
