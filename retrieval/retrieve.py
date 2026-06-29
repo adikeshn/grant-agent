@@ -4,7 +4,13 @@ from ingestion.celery_app import app
 import json
 from sentence_transformers import CrossEncoder
 
-model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+_cross_encoder = None
+
+def get_cross_encoder():
+    global _cross_encoder
+    if _cross_encoder is None:
+        _cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+    return _cross_encoder
 
 def retrieve_chunk_rankings(bm25_indexes, pinecone_index, supabase_conn, domain: str,
                             query_text: str, top_dense: int, top_sparse: int, 
@@ -38,7 +44,7 @@ def retrieve_chunk_rankings(bm25_indexes, pinecone_index, supabase_conn, domain:
                 cross_encode_inp.append((query_text, value[1]))
                 retrieved_ids.append(key)
                 headers.append(value[2])
-        return sorted((zip(retrieved_ids, cross_encode_inp, headers, model.predict(cross_encode_inp))), key=lambda x: x[3], reverse=True)[:top_final]
+        return sorted((zip(retrieved_ids, cross_encode_inp, headers, get_cross_encoder().predict(cross_encode_inp))), key=lambda x: x[3], reverse=True)[:top_final]
 
 
     except Exception as e:
