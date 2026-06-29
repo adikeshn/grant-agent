@@ -20,7 +20,8 @@ def connect_pinecone():
 
 def bge_m3_embed(text: str):
     output = client.feature_extraction(text, model="BAAI/bge-m3")
-    return [float(x) for x in output['dense_vecs'][0]]
+    return [float(x) for x in output[0]]
+
 
 
 
