@@ -96,6 +96,8 @@ def run_cypher_queries(llm_response, domain, driver):
     for query_obj in cypher_queries:
         cypher = query_obj["cypher"]
         purpose = query_obj["purpose"]
+        print(f"Cypher: {cypher}")
+        print(f"Purpose: {purpose}")
 
         cypher_lower = cypher.lower()
         if any(kw in cypher_lower for kw in forbidden_keywords):

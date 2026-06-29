@@ -772,3 +772,36 @@ html, body, #root {
   .thread { padding: 20px 16px; }
   .input-zone { padding: 14px 16px; }
 }
+
+.assistant-body table {
+  border-collapse: collapse;
+  margin: 0 0 0.75em;
+  width: 100%;
+  font-size: 13px;
+}
+
+.assistant-body th {
+  background: var(--slate-mid);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  padding: 7px 12px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.assistant-body td {
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 12px;
+}
+
+.assistant-body tr:last-child td {
+  border-bottom: none;
+}
+
+.assistant-body thead {
+  border-bottom: 1px solid var(--teal);
+}

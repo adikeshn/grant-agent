@@ -63,7 +63,11 @@ def add_domain(new_domain: DomainRequest, req: Request) -> DomainResponse:
 @api.get("/poll_injest")
 def poll_injest_response(task_id: str = "") -> DomainResponse:
     task = AsyncResult(task_id, app=celery_app)
-    return DomainResponse(task_id=task_id, status=task.status, result=task.result or 0)
+    status = task.status
+    result = task.result if status == "SUCCESS" else 0
+    if not isinstance(result, int):
+        result = 0
+    return DomainResponse(task_id=task_id, status=status, result=result)
 
 def deserialize_messages(messages: list[MessageDict]):
     result = []
@@ -89,7 +93,12 @@ async def handle_query(input: QueryRequest, req: Request) -> QueryResponse:
         {"role": "user" if isinstance(m, HumanMessage) else "assistant", "content": m.content}
         for m in result["history"]
     ]
+    raw_sources = result.get("sources", [])
+    sources = [
+        s if isinstance(s, dict) else {"title": s}
+        for s in raw_sources
+    ]
     return QueryResponse(error=("error_msg" in result), 
-                        sources=result.get("sources", []),
+                        sources=sources,
                         response=(result.get("error_msg", result.get("response"))), 
                         history=serialized_messages)

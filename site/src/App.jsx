@@ -1,26 +1,27 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { sendQuery, getDomains } from './api';
-import SourcesCard from './SourcesCard';
-import IngestPanel from './IngestPanel';
-import ReactMarkdown from 'react-markdown';
-import './index.css';
+import { useState, useRef, useEffect, useCallback } from "react";
+import { sendQuery, getDomains } from "./api";
+import remarkGfm from "remark-gfm";
+import SourcesCard from "./SourcesCard";
+import IngestPanel from "./IngestPanel";
+import ReactMarkdown from "react-markdown";
+import "./index.css";
 
-const STORAGE_KEY = 'grant_agent_history';
+const STORAGE_KEY = "grant_agent_history";
 
 function useAutoResize(ref) {
   const resize = useCallback(() => {
     if (!ref.current) return;
-    ref.current.style.height = 'auto';
-    ref.current.style.height = Math.min(ref.current.scrollHeight, 140) + 'px';
+    ref.current.style.height = "auto";
+    ref.current.style.height = Math.min(ref.current.scrollHeight, 140) + "px";
   }, [ref]);
   return resize;
 }
 
 export default function App() {
-  const [domain, setDomain] = useState('');
-  const [domains, setDomains] = useState([]);        // list from /domains
+  const [domain, setDomain] = useState("");
+  const [domains, setDomains] = useState([]); // list from /domains
   const [domainsLoading, setDomainsLoading] = useState(true);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [messages, setMessages] = useState([]); // [{role, content, sources, error}]
   const [apiHistory, setApiHistory] = useState([]); // [{role, content}] — sent to API
   const [loading, setLoading] = useState(false);
@@ -38,7 +39,10 @@ export default function App() {
 
   // Persist to sessionStorage whenever anything relevant changes
   useEffect(() => {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ domain, messages, apiHistory }));
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ domain, messages, apiHistory }),
+    );
   }, [messages, domain, apiHistory]);
 
   async function fetchDomains() {
@@ -50,7 +54,7 @@ export default function App() {
       // If the saved domain is still valid keep it; otherwise default to first
       setDomain((prev) => {
         if (prev && list.includes(prev)) return prev;
-        return list[0] || '';
+        return list[0] || "";
       });
     } catch {
       // API unreachable — leave domains empty, user sees the empty state
@@ -65,7 +69,7 @@ export default function App() {
       const saved = sessionStorage.getItem(STORAGE_KEY);
       if (saved) {
         const { domain: d, messages: m, apiHistory: h } = JSON.parse(saved);
-        setDomain(d || '');
+        setDomain(d || "");
         setMessages(m || []);
         setApiHistory(h || []);
       }
@@ -79,18 +83,18 @@ export default function App() {
     if (!canSend) return;
 
     const userQuery = query.trim();
-    setQuery('');
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    setQuery("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     // Optimistically add the user message
-    setMessages((prev) => [...prev, { role: 'user', content: userQuery }]);
+    setMessages((prev) => [...prev, { role: "user", content: userQuery }]);
     setLoading(true);
 
     try {
       const result = await sendQuery(userQuery, domain.trim(), apiHistory);
 
       const assistantMsg = {
-        role: 'assistant',
+        role: "assistant",
         content: result.response,
         sources: result.sources || [],
         error: result.error,
@@ -102,8 +106,9 @@ export default function App() {
       setMessages((prev) => [
         ...prev,
         {
-          role: 'assistant',
-          content: err.message || 'Could not reach the API. Is the server running?',
+          role: "assistant",
+          content:
+            err.message || "Could not reach the API. Is the server running?",
           sources: [],
           error: true,
         },
@@ -114,7 +119,7 @@ export default function App() {
   }
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -127,7 +132,7 @@ export default function App() {
   }
 
   // Derive conversation history for the sidebar (just user turns)
-  const userTurns = messages.filter((m) => m.role === 'user');
+  const userTurns = messages.filter((m) => m.role === "user");
 
   return (
     <div className="app">
@@ -143,7 +148,9 @@ export default function App() {
           {domainsLoading ? (
             <div className="domain-select-loading">loading…</div>
           ) : domains.length === 0 ? (
-            <div className="domain-select-empty">No domains yet — ingest a corpus first.</div>
+            <div className="domain-select-empty">
+              No domains yet — ingest a corpus first.
+            </div>
           ) : (
             <select
               className="domain-select"
@@ -151,13 +158,20 @@ export default function App() {
               onChange={(e) => setDomain(e.target.value)}
             >
               {domains.map((d) => (
-                <option key={d} value={d}>{d}</option>
+                <option key={d} value={d}>
+                  {d}
+                </option>
               ))}
             </select>
           )}
         </div>
 
-        <IngestPanel onDomainReady={(name) => { setDomain(name); fetchDomains(); }} />
+        <IngestPanel
+          onDomainReady={(name) => {
+            setDomain(name);
+            fetchDomains();
+          }}
+        />
 
         {userTurns.length > 0 && (
           <div className="sidebar-section">
@@ -171,8 +185,10 @@ export default function App() {
                   onClick={() => {
                     if (threadRef.current) {
                       // Scroll to the message at that index
-                      const pairs = threadRef.current.querySelectorAll('.message-pair');
-                      if (pairs[i]) pairs[i].scrollIntoView({ behavior: 'smooth' });
+                      const pairs =
+                        threadRef.current.querySelectorAll(".message-pair");
+                      if (pairs[i])
+                        pairs[i].scrollIntoView({ behavior: "smooth" });
                     }
                   }}
                 >
@@ -202,27 +218,29 @@ export default function App() {
 
           {/* Pair up user + assistant messages */}
           {messages.reduce((acc, msg, i) => {
-            if (msg.role === 'user') {
+            if (msg.role === "user") {
               const next = messages[i + 1];
               acc.push(
                 <div className="message-pair" key={i}>
                   <div className="user-bubble">{msg.content}</div>
-                  {next && next.role === 'assistant' && (
+                  {next && next.role === "assistant" && (
                     <div className="assistant-block">
                       <span className="assistant-label">
-                        {next.error ? 'Error' : 'Grant Intelligence'}
+                        {next.error ? "Error" : "Grant Intelligence"}
                       </span>
                       {next.error ? (
                         <div className="error-body">{next.content}</div>
                       ) : (
                         <div className="assistant-body">
-                          <ReactMarkdown>{next.content}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {next.content}
+                          </ReactMarkdown>
                         </div>
                       )}
                       <SourcesCard sources={next.sources} />
                     </div>
                   )}
-                </div>
+                </div>,
               );
             }
             return acc;
@@ -232,9 +250,13 @@ export default function App() {
             <div className="loading-block">
               <span className="assistant-label">Grant Intelligence</span>
               <div className="loading-dots">
-                <span /><span /><span />
+                <span />
+                <span />
+                <span />
               </div>
-              <span className="loading-hint">querying {domain || 'database'}…</span>
+              <span className="loading-hint">
+                querying {domain || "database"}…
+              </span>
             </div>
           )}
         </div>
@@ -244,7 +266,7 @@ export default function App() {
           <div className="domain-badge">
             <div className="domain-badge-dot" />
             <span>domain: </span>
-            <strong>{domain || 'not set'}</strong>
+            <strong>{domain || "not set"}</strong>
           </div>
 
           <div className="input-row">
@@ -255,7 +277,7 @@ export default function App() {
               placeholder={
                 domain
                   ? `Ask about ${domain} grants…`
-                  : 'Set a domain in the sidebar first'
+                  : "Set a domain in the sidebar first"
               }
               value={query}
               rows={1}
@@ -267,7 +289,11 @@ export default function App() {
               disabled={loading}
               spellCheck={false}
             />
-            <button className="send-btn" onClick={handleSend} disabled={!canSend}>
+            <button
+              className="send-btn"
+              onClick={handleSend}
+              disabled={!canSend}
+            >
               Send
             </button>
           </div>

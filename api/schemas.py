@@ -24,7 +24,7 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     error: bool
     response: str
-    sources: list[dict] = []
+    sources: list = []
     history: list[dict]
 
 class DomainResponse(BaseModel):
