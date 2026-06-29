@@ -22,6 +22,9 @@ dependencies = [
     # Pinecone
     "pinecone",
 
+    # Neo4j
+    "neo4j",
+
     # LangChain / LangGraph
     "langchain-anthropic",
     "langchain-core",
@@ -44,7 +47,6 @@ dependencies = [
 
     # Utilities
     "requests",
-    "pyyaml",
 ]
 
 [tool.setuptools.packages.find]

@@ -5,6 +5,7 @@ celery[redis]
 psycopg2-binary
 python-dotenv
 pinecone
+neo4j
 langchain-anthropic
 langchain-core
 langchain-text-splitters
@@ -16,4 +17,3 @@ sentence-transformers
 transformers
 rank-bm25
 requests
-pyyaml
