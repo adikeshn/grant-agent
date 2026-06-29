@@ -28,11 +28,14 @@ dependencies = [
     "langchain-text-splitters",
     "langgraph",
 
-    # Anthropic SDK (direct usage in agent.py)
+    # Anthropic SDK
     "anthropic",
 
+    # Google Gemini
+    "google-generativeai",
+
     # Embeddings / reranking
-    "FlagEmbedding",
+    "huggingface-hub",
     "sentence-transformers",
     "transformers",
 

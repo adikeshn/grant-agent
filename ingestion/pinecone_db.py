@@ -1,6 +1,6 @@
 from pinecone import Pinecone
 from dotenv import load_dotenv
-from FlagEmbedding import BGEM3FlagModel
+from huggingface_hub import InferenceClient
 import os
 
 
@@ -9,7 +9,7 @@ load_dotenv()
 api_key = os.getenv("PINECONE_API_KEY")
 index_name = os.getenv("PINECONE_INDEX_NAME")
 
-model = BGEM3FlagModel('BAAI/bge-m3', use_fp16=True)
+client = InferenceClient(token=os.getenv("HF_TOKEN"))
 
 def connect_pinecone():
     pc = Pinecone(api_key=api_key)
@@ -19,7 +19,7 @@ def connect_pinecone():
     return index
 
 def bge_m3_embed(text: str):
-    output = model.encode([text], max_length=8192)
+    output = client.feature_extraction(text, model="BAAI/bge-m3")
     return [float(x) for x in output['dense_vecs'][0]]
 
 
