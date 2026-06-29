@@ -42,7 +42,7 @@ Amount: {award['amount']}"""
     chunks = text_splitter.split_text(abstract)
 
     return [{
-        "id": f"chunk-{award["award_id"]}-{chunk_i}",
+        "id": f"chunk-{award['award_id']}-{chunk_i}",
         'metadata': {
             "award_id": award["award_id"],
             "domain": award["domain"],
