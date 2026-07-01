@@ -1,22 +1,9 @@
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from transformers import AutoTokenizer
 
-
-model_name = "BAAI/bge-m3"
-_tokenizer = None
-
-def get_tokenizer():
-    global _tokenizer
-    if _tokenizer is None:
-        _tokenizer = AutoTokenizer.from_pretrained(model_name)
-    return _tokenizer
 
 def bge_m3_token_len(text: str) -> int:
-    return len(get_tokenizer().encode(text, add_special_tokens=False))
-
-def bge_m3_tokenize(text: str):
-    return get_tokenizer().encode(text, add_special_tokens=False)
+    return len(text) // 4
 
 def chunk_award(award: dict, chunk_size: int = 1400, overlap: int = 50):
     header = f"""Title: {award['title']}
