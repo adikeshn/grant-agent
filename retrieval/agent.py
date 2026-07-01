@@ -39,7 +39,7 @@ def build_graph():
 
     def classify_retrieval(state: GrantState) -> dict:
         try:
-            prompt = f"{CLASSIFIER_SYSTEM_PROMPT}\n\n{state['query']}"
+            prompt = f"{CLASSIFIER_SYSTEM_PROMPT}\n\nConversation History: {state['history']}\n\nCurrent Query: {state['query']}"
             response = gemini_model.generate_content(prompt)
 
             content = response.text
@@ -114,14 +114,18 @@ def build_graph():
 
     def invoke_llm(state: GrantState) -> dict:
         try:
-            context = "\n\n".join(state["chunks"])
+            if state.get("path") == "none":
+                instruction = "Answer the question using the conversation history above or from general knowledge."
+            else:
+                instruction = "Answer the question using only the abstracts above as well as any prior chat history."
+            context = "\n\n".join(state.get("chunks", "None, question either requires no retrieval or answer is in conversation history"))
             messages = [SystemMessage(content=SYNTHESIS_SYSTEM_PROMPT)]
             messages += state["history"]
             messages += [HumanMessage(content=
             f"""Question: {state["query"]}
             Retrieved award abstracts:
             {context}
-            Answer the question using only the abstracts above as well as any prior chat history.""")]
+            {instruction}""")]
                 
             response = llm_sonnet.invoke(messages)
                 
@@ -139,6 +143,8 @@ def build_graph():
         print("reasoning: " + state.get("reasoning", "N/A"))
         if "error_msg" in state or state.get("path", "") == "":
             return "END"
+        elif state.get("path") == "none":
+            return "invoke_llm"
         elif state.get("path") == "chunk":
             return "chunk_retrieval"
         elif state.get("path") == "graph":
@@ -162,6 +168,7 @@ def build_graph():
         "classify_query",
         route_after_classify, {
             "END": END,
+            "invoke_llm": "invoke_llm",
             "chunk_retrieval": "chunk_retrieval",
             "graph_retrieval": "graph_retrieval"
         }

@@ -6,9 +6,17 @@ Your job is to classify an incoming researcher query into exactly one execution 
 
 ## Execution paths
 
+**none** — the query does not require grant data at all. Route here if the query is a general knowledge question unrelated to grants (e.g. "how does reinforcement learning work"), OR if the answer is already present in the conversation history provided.
+
 **chunk** — the query asks about the *content, framing, or specifics* of award abstracts. The answer lives in the text of individual grants.
 
 **graph** — the query asks about *relationships, distributions, trends, or patterns across the population of awards*. The answer requires aggregation, traversal, or structural analysis.
+
+## Route to NONE if any of the following are true:
+- The query is a general knowledge or conceptual question that does not mention grants, funding, PIs, institutions, or NSF/NIH (e.g. "explain transformers", "what is a p-value", "how does RLHF work")
+- The query asks for clarification or elaboration on something the assistant already said in conversation history
+- The query is conversational or meta (e.g. "can you summarize what we've discussed", "what did you just say about X", "thanks")
+- The answer can be fully derived from the conversation history without any retrieval
 
 ## Route to GRAPH if the query contains any of these signals:
 - Collaboration or network: "who works with", "co-PI", "partners", "institutions working together", "collaborators"
@@ -19,7 +27,7 @@ Your job is to classify an incoming researcher query into exactly one execution 
 - Aggregation: the answer requires counts, totals, distributions, or year-over-year comparisons across many awards
 
 ## Route to CHUNK if the query contains any of these signals:
-- Mechanism or technique: "how is X used", "what methods", "approach to", "technique for", "how does X work"
+- Mechanism or technique: "how is X used", "what methods", "approach to", "technique for", "how does X work" — only when the question is specifically about how grants approach or describe X, not a general knowledge question about X
 - Framing or language: "how do grants frame", "what language", "broader impacts", "how is X described", "framing"
 - PI depth: "what has [PI name] worked on", "research by [PI name]" — content about a PI, not their relationships
 - Proposal writing: "help me write", "draft", "similar to my proposal", "examples of", "how should I frame"
@@ -32,10 +40,12 @@ Your job is to classify an incoming researcher query into exactly one execution 
 - Topic + "find me grants" → chunk
 - Topic + "how much is funded" → graph
 - "How do NSF grants frame X" → chunk
+- "How does X work" with no grant context → none
 - "Which directorates fund X" → graph
-- When genuinely ambiguous → default to chunk. Chunk degrades gracefully; graph fails hard on content questions.
+- When genuinely ambiguous between chunk and graph → default to chunk. Chunk degrades gracefully; graph fails hard on content questions.
 
 ## top_k rules:
+- none: 0 (no retrieval)
 - chunk, mechanism/technique query: 6
 - chunk, PI depth query: 10
 - chunk, proposal framing query: 12
@@ -43,12 +53,13 @@ Your job is to classify an incoming researcher query into exactly one execution 
 - graph: 0 (graph path does not use top_k)
 
 ## Query types:
+none path: "general_knowledge", "history_present", "conversational"
 chunk path: "mechanism", "pi_depth", "proposal_framing", "award_specifics"
 graph path: "landscape", "trend", "collaboration_network", "gap_analysis", "institution_ranking"
 
 ## Output format:
 {
-  "path": "chunk" | "graph",
+  "path": "none" | "chunk" | "graph",
   "query_type": "<one of the types above>",
   "top_k": <integer>,
   "reasoning": "<one sentence max, for logging only>"
