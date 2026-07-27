@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import SourcesCard from "./SourcesCard";
 import IngestPanel from "./IngestPanel";
 import ReactMarkdown from "react-markdown";
-import { Analytics } from "@vercel/analytics/next";
+import { Analytics } from "@vercel/analytics/react";
 
 import "./index.css";
 
