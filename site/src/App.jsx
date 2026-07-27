@@ -4,6 +4,8 @@ import remarkGfm from "remark-gfm";
 import SourcesCard from "./SourcesCard";
 import IngestPanel from "./IngestPanel";
 import ReactMarkdown from "react-markdown";
+import { Analytics } from "@vercel/analytics/next";
+
 import "./index.css";
 
 const STORAGE_KEY = "grant_agent_history";
@@ -142,7 +144,7 @@ export default function App() {
           <h1>Grant Intelligence</h1>
           <p>NSF · NIH award explorer</p>
         </div>
-
+        <Analytics />
         <div className="sidebar-section">
           <label>Domain</label>
           {domainsLoading ? (
