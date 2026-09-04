@@ -17,8 +17,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Installed requests for API calling, kept neo4j driver
       - name: Install dependencies
-        run: pip install neo4j psycopg2-binary
+        run: pip install neo4j requests 
 
       - name: Ping Neo4j and Supabase
         run: python scripts/keepalive.py
@@ -26,4 +27,5 @@ jobs:
           NEO4J_URI: ${{ secrets.NEO4J_URI }}
           NEO4J_USER: ${{ secrets.NEO4J_USER }}
           NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
