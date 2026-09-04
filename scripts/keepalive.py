@@ -1,7 +1,7 @@
 import os
 import sys
+import requests
 from neo4j import GraphDatabase
-import psycopg2
 
 def ping_neo4j():
     driver = GraphDatabase.driver(
@@ -14,12 +14,18 @@ def ping_neo4j():
     driver.close()
 
 def ping_supabase():
-    conn = psycopg2.connect(os.environ["SUPABASE_DB_URL"])
-    cur = conn.cursor()
-    cur.execute("SELECT 1")
-    print("Supabase OK:", cur.fetchone())
-    cur.close()
-    conn.close()
+    # Targets the built-in REST API which reliably registers database activity
+    url = f"{os.environ['SUPABASE_URL']}/rest/v1/chunks?select=id&limit=1"
+    headers = {
+        "apikey": os.environ["SUPABASE_ANON_KEY"],
+        "Authorization": f"Bearer {os.environ['SUPABASE_ANON_KEY']}"
+    }
+    
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        print("Supabase REST API OK:", response.json())
+    else:
+        raise Exception(f"HTTP {response.status_code}: {response.text}")
 
 if __name__ == "__main__":
     failures = []
